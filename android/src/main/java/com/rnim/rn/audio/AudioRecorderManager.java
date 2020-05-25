@@ -2,43 +2,40 @@ package com.rnim.rn.audio;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.media.MediaRecorder;
+import android.os.Build;
+import android.os.Environment;
+import android.util.Base64;
+import android.util.Log;
 
-import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.bridge.ReactContextBaseJavaModule;
-import com.facebook.react.bridge.ReactMethod;
+import androidx.core.content.ContextCompat;
+
+
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.modules.core.DeviceEventManagerModule;
+
+
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
-
-import android.content.pm.PackageManager;
-import android.os.Build;
-import android.os.Environment;
-import android.media.MediaRecorder;
-import android.media.AudioManager;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.util.Base64;
-import android.util.Log;
-import com.facebook.react.modules.core.DeviceEventManagerModule;
-
-import java.io.FileInputStream;
-
-import java.lang.reflect.Method;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.IllegalAccessException;
-import java.lang.NoSuchMethodException;
 
 class AudioRecorderManager extends ReactContextBaseJavaModule {
 
@@ -64,6 +61,7 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
   private boolean isPauseResumeCapable = false;
   private Method pauseMethod = null;
   private Method resumeMethod = null;
+  private int progressUpdateInterval = 1000;
 
 
   public AudioRecorderManager(ReactApplicationContext reactContext) {
@@ -112,6 +110,7 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
   public void prepareRecordingAtPath(String recordingPath, ReadableMap recordingSettings, Promise promise) {
     if (isRecording){
       logAndRejectPromise(promise, "INVALID_STATE", "Please call stopRecording before starting recording");
+      return;
     }
     File destFile = new File(recordingPath);
     if (destFile.getParentFile() != null) {
@@ -129,6 +128,7 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
       recorder.setAudioEncodingBitRate(recordingSettings.getInt("AudioEncodingBitRate"));
       recorder.setOutputFile(destFile.getPath());
       includeBase64 = recordingSettings.getBoolean("IncludeBase64");
+      setProgressUpdateInterval(recordingSettings.getInt("ProgressUpdateInterval"));
     }
     catch(final Exception e) {
       logAndRejectPromise(promise, "COULDNT_CONFIGURE_MEDIA_RECORDER" , "Make sure you've added RECORD_AUDIO permission to your AndroidManifest.xml file "+e.getMessage());
@@ -196,14 +196,19 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
       logAndRejectPromise(promise, "INVALID_STATE", "Please call stopRecording before starting recording");
       return;
     }
-    recorder.start();
 
-    stopWatch.reset();
-    stopWatch.start();
-    isRecording = true;
-    isPaused = false;
-    startTimer();
-    promise.resolve(currentOutputFile);
+    try {
+      recorder.start();
+
+      stopWatch.reset();
+      stopWatch.start();
+      isRecording = true;
+      isPaused = false;
+      startTimer();
+      promise.resolve(currentOutputFile);
+    } catch(Exception e) {
+      logAndRejectPromise(promise, "INVALID_STATE", "There was an error using your microphone");
+    }
   }
 
   @ReactMethod
@@ -224,6 +229,10 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
     }
     catch (final RuntimeException e) {
       // https://developer.android.com/reference/android/media/MediaRecorder.html#stop()
+      try {
+        recorder.release();
+      } catch (final Exception e2) { }
+      
       logAndRejectPromise(promise, "RUNTIME_EXCEPTION", "No valid audio data received. You may be using a device that can't record audio.");
       return;
     }
@@ -315,10 +324,18 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
         if (!isPaused) {
           WritableMap body = Arguments.createMap();
           body.putDouble("currentTime", stopWatch.getTimeSeconds());
+
+          int amplitude = recorder.getMaxAmplitude();
+          if (amplitude == 0) {
+            body.putInt("currentMetering", -160);
+          } else {
+            body.putInt("currentMetering", (int) (20 * Math.log(((double) amplitude) / 32767d)));
+          }
+
           sendEvent("recordingProgress", body);
         }
       }
-    }, 0, 1000);
+    }, 0, progressUpdateInterval);
   }
 
   private void stopTimer(){
@@ -339,4 +356,12 @@ class AudioRecorderManager extends ReactContextBaseJavaModule {
     Log.e(TAG, errorMessage);
     promise.reject(errorCode, errorMessage);
   }
+
+  private void setProgressUpdateInterval(int progressUpdateInterval) {
+    if(progressUpdateInterval < 100) {
+      this.progressUpdateInterval = 100;
+    } else {
+      this.progressUpdateInterval = progressUpdateInterval;
+    }
+  }  
 }

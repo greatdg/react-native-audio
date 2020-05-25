@@ -13,7 +13,7 @@ import ReactNative, {
 var AudioRecorderManager = NativeModules.AudioRecorderManager;
 
 var AudioRecorder = {
-  prepareRecordingAtPath: function(path, options) {
+  prepareRecordingAtPath: function (path, options) {
     if (this.progressSubscription) this.progressSubscription.remove();
     this.progressSubscription = NativeAppEventEmitter.addListener('recordingProgress',
       (data) => {
@@ -42,10 +42,14 @@ var AudioRecorder = {
       MeasurementMode: false,
       AudioEncodingBitRate: 32000,
       IncludeBase64: false,
-      AudioSource: 0
+      AudioSource: 0,
+      ProgressUpdateInterval: 1000,
     };
 
-    var recordingOptions = {...defaultOptions, ...options};
+    var recordingOptions = {
+      ...defaultOptions,
+      ...options
+    };
 
     if (Platform.OS === 'ios') {
       AudioRecorderManager.prepareRecordingAtPath(
@@ -62,16 +66,16 @@ var AudioRecorder = {
       return AudioRecorderManager.prepareRecordingAtPath(path, recordingOptions);
     }
   },
-  startRecording: function() {
+  startRecording: function () {
     return AudioRecorderManager.startRecording();
   },
-  pauseRecording: function() {
+  pauseRecording: function () {
     return AudioRecorderManager.pauseRecording();
   },
-  resumeRecording: function() {
+  resumeRecording: function () {
     return AudioRecorderManager.resumeRecording();
   },
-  stopRecording: function() {
+  stopRecording: function () {
     return AudioRecorderManager.stopRecording();
   },
   checkAuthorizationStatus: AudioRecorderManager.checkAuthorizationStatus,
@@ -90,7 +94,7 @@ var AudioRecorder = {
         })
       });
   },
-  removeListeners: function() {
+  removeListeners: function () {
     if (this.progressSubscription) this.progressSubscription.remove();
     if (this.finishedSubscription) this.finishedSubscription.remove();
   },
@@ -130,4 +134,8 @@ if (Platform.OS === 'ios') {
   };
 }
 
-module.exports = {AudioRecorder, AudioUtils, AudioSource};
+module.exports = {
+  AudioRecorder,
+  AudioUtils,
+  AudioSource
+};
