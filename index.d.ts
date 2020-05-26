@@ -46,7 +46,7 @@ export var AudioRecorder: {
   resumeRecording(): Promise<string>;
   pauseRecording(): Promise<string>;
   checkAuthorizationStatus(): Promise<boolean>;
-  onProgress(res: { currentTime: number }): void;
+  onProgress(res: { currentMetering: number; currentTime: number }): void;
   onFinished(res: {
     audioFileURL: string;
     base64: string;
