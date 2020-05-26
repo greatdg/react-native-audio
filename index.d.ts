@@ -33,6 +33,7 @@ export interface IRecordingOptions {
   AudioEncodingBitRate?: number;
   IncludeBase64?: boolean;
   AudioSource?: number;
+  ProgressUpdateInterval?: number;
 }
 
 export var AudioRecorder: {
